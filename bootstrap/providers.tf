@@ -1,3 +1,7 @@
+# Terraform and provider configuration for the bootstrap module.
+# This module creates foundational resources (ECR, Route53, ACM) that must
+# exist before the main infrastructure can be deployed.
+
 terraform {
   required_version = ">= 1.5"
 
@@ -8,6 +12,8 @@ terraform {
     }
   }
 
+  # Remote state stored in S3 with DynamoDB locking to prevent concurrent runs.
+  # The S3 bucket and DynamoDB table must be created manually before first init.
   backend "s3" {
     bucket         = "streaver-challenge-terraform-bootstrap"
     key            = "terraform.tfstate"
@@ -17,6 +23,8 @@ terraform {
   }
 }
 
+# Default tags are applied to every resource created by this module,
+# making it easy to identify and filter resources in the AWS console.
 provider "aws" {
   region = var.aws_region
 

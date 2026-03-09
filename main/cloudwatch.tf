@@ -1,9 +1,16 @@
+# CloudWatch alarms and SNS alerting.
+# Monitors ECS service health and ALB request quality.
+# All alarms send notifications to the SNS topic (email subscription optional).
+
 # --- SNS Topic for Alerts ---
+# Central notification channel. Alarms publish here on both ALARM and OK transitions.
 
 resource "aws_sns_topic" "alerts" {
   name = "${var.project_name}-alerts"
 }
 
+# Optional email subscription — only created if alert_email is provided.
+# The subscriber must confirm the subscription via a link sent to their email.
 resource "aws_sns_topic_subscription" "email" {
   count     = var.alert_email != "" ? 1 : 0
   topic_arn = aws_sns_topic.alerts.arn
@@ -12,6 +19,8 @@ resource "aws_sns_topic_subscription" "email" {
 }
 
 # --- High CPU Alarm ---
+# Triggers when average CPU across the ECS service exceeds 85% for 2 consecutive minutes.
+# Indicates the service may need more tasks or larger task sizes.
 
 resource "aws_cloudwatch_metric_alarm" "high_cpu" {
   alarm_name          = "${var.project_name}-high-cpu"
@@ -33,6 +42,8 @@ resource "aws_cloudwatch_metric_alarm" "high_cpu" {
 }
 
 # --- High Memory Alarm ---
+# Triggers when average memory exceeds 90% for 2 consecutive minutes.
+# Python can spike memory during request processing; this catches sustained high usage.
 
 resource "aws_cloudwatch_metric_alarm" "high_memory" {
   alarm_name          = "${var.project_name}-high-memory"
@@ -54,6 +65,8 @@ resource "aws_cloudwatch_metric_alarm" "high_memory" {
 }
 
 # --- ALB 5XX Errors Alarm ---
+# Triggers when target 5XX errors exceed 10 in 2 consecutive minutes.
+# treat_missing_data = "notBreaching" avoids false alarms when there's no traffic.
 
 resource "aws_cloudwatch_metric_alarm" "alb_5xx" {
   alarm_name          = "${var.project_name}-alb-5xx"
@@ -76,6 +89,8 @@ resource "aws_cloudwatch_metric_alarm" "alb_5xx" {
 }
 
 # --- Unhealthy Hosts Alarm ---
+# Triggers immediately when any target fails the ALB health check.
+# Indicates a task crash, misconfiguration, or deployment issue.
 
 resource "aws_cloudwatch_metric_alarm" "unhealthy_hosts" {
   alarm_name          = "${var.project_name}-unhealthy-hosts"
@@ -97,6 +112,8 @@ resource "aws_cloudwatch_metric_alarm" "unhealthy_hosts" {
 }
 
 # --- Running Task Count Alarm ---
+# Triggers when the number of running tasks drops below the minimum capacity.
+# Uses Container Insights metrics (requires containerInsights = "enabled" on the cluster).
 
 resource "aws_cloudwatch_metric_alarm" "low_running_tasks" {
   alarm_name          = "${var.project_name}-low-running-tasks"
@@ -106,7 +123,7 @@ resource "aws_cloudwatch_metric_alarm" "low_running_tasks" {
   namespace           = "ECS/ContainerInsights"
   period              = 60
   statistic           = "Minimum"
-  threshold           = var.min_capacity
+  threshold           = 2
   alarm_description   = "Running tasks below minimum capacity"
   alarm_actions       = [aws_sns_topic.alerts.arn]
   ok_actions          = [aws_sns_topic.alerts.arn]

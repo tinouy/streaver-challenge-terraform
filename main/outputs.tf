@@ -1,3 +1,6 @@
+# Outputs displayed after terraform apply.
+# Useful for verifying the deployment and for CI/CD scripts.
+
 output "alb_dns_name" {
   description = "ALB public DNS name"
   value       = aws_lb.main.dns_name

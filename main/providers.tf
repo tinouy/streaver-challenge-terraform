@@ -1,3 +1,7 @@
+# Terraform and provider configuration for the main module.
+# This module creates the runtime infrastructure (VPC, ALB, ECS, etc.)
+# and depends on the bootstrap module having been applied first.
+
 terraform {
   required_version = ">= 1.5"
 
@@ -8,6 +12,8 @@ terraform {
     }
   }
 
+  # Remote state stored in a separate S3 bucket from bootstrap,
+  # so each module's state is isolated and independently manageable.
   backend "s3" {
     bucket         = "streaver-challenge-terraform-main"
     key            = "terraform.tfstate"
@@ -17,6 +23,7 @@ terraform {
   }
 }
 
+# Default tags are applied to every resource created by this module.
 provider "aws" {
   region = var.aws_region
 

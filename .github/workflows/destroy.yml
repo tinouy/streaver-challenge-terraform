@@ -1,17 +1,34 @@
+# Terraform Destroy workflow — tears down all infrastructure.
+#
+# Triggered ONLY manually via Actions > "Terraform Destroy" > "Run workflow".
+# Never runs automatically on push/PR to prevent accidental destruction.
+#
+# Destroy order matters:
+#   1. Main is destroyed first (VPC, ALB, ECS, etc.)
+#   2. Bootstrap is destroyed second (ECR, Route53, ACM, SSM)
+# This is the reverse of the apply order because main resources
+# reference bootstrap outputs (e.g. ACM cert ARN, Route53 zone ID).
+#
+# Both steps require manual approval via the "destroy" environment.
+#
+# Required GitHub environments:
+#   - destroy: with required reviewers
+
 name: Terraform Destroy
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # Manual trigger only
 
 env:
   AWS_REGION: us-east-1
   TF_VERSION: "1.7"
 
 jobs:
+  # Step 1: Destroy main infrastructure first.
   main-destroy:
     name: Main — Destroy
     runs-on: ubuntu-latest
-    environment: destroy
+    environment: destroy # Requires manual approval
     steps:
       - uses: actions/checkout@v4
 
@@ -35,11 +52,12 @@ jobs:
         working-directory: main
         run: terraform destroy -auto-approve
 
+  # Step 2: Destroy bootstrap after main is gone.
   bootstrap-destroy:
     name: Bootstrap — Destroy
-    needs: main-destroy
+    needs: main-destroy # Wait for main to be fully destroyed
     runs-on: ubuntu-latest
-    environment: destroy
+    environment: destroy # Requires manual approval (second confirmation)
     steps:
       - uses: actions/checkout@v4
 

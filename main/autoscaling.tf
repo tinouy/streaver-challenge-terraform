@@ -1,12 +1,20 @@
+# Application Auto Scaling for the ECS service.
+# Uses target tracking policies that automatically adjust the desired task count
+# based on CPU, memory, and request count metrics.
+
+# Register the ECS service as a scalable target.
+# min/max capacity bounds prevent scaling to zero (HA) or runaway costs.
 resource "aws_appautoscaling_target" "ecs" {
-  max_capacity       = var.max_capacity
-  min_capacity       = var.min_capacity
+  max_capacity       = 6
+  min_capacity       = 2
   resource_id        = "service/${aws_ecs_cluster.main.name}/${aws_ecs_service.app.name}"
   scalable_dimension = "ecs:service:DesiredCount"
   service_namespace  = "ecs"
 }
 
-# Scale on CPU utilization
+# --- CPU-based scaling ---
+# Target: 70% average CPU. Scales out at 60s cooldown (fast response to spikes),
+# scales in at 300s cooldown (slow to prevent flapping).
 resource "aws_appautoscaling_policy" "cpu" {
   name               = "${var.project_name}-cpu-scaling"
   policy_type        = "TargetTrackingScaling"
@@ -24,7 +32,9 @@ resource "aws_appautoscaling_policy" "cpu" {
   }
 }
 
-# Scale on memory utilization
+# --- Memory-based scaling ---
+# Target: 80% average memory. Higher than CPU target because Python's memory
+# usage is less elastic and brief spikes are expected.
 resource "aws_appautoscaling_policy" "memory" {
   name               = "${var.project_name}-memory-scaling"
   policy_type        = "TargetTrackingScaling"
@@ -42,7 +52,9 @@ resource "aws_appautoscaling_policy" "memory" {
   }
 }
 
-# Scale on ALB request count per target
+# --- Request count scaling ---
+# Target: 1000 requests per target. Scales based on traffic volume regardless
+# of CPU/memory usage. The resource_label links this to the specific ALB+TG pair.
 resource "aws_appautoscaling_policy" "requests" {
   name               = "${var.project_name}-request-scaling"
   policy_type        = "TargetTrackingScaling"

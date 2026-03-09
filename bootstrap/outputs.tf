@@ -1,3 +1,5 @@
+# Outputs for human consumption (visible after terraform apply).
+
 output "ecr_repository_url" {
   description = "ECR repository URL for pushing images"
   value       = aws_ecr_repository.app.repository_url
@@ -18,7 +20,10 @@ output "acm_certificate_arn" {
   value       = aws_acm_certificate_validation.main.certificate_arn
 }
 
-# --- SSM Parameters (consumed by main module) ---
+# --- SSM Parameters ---
+# Store bootstrap outputs in SSM Parameter Store so the main module can
+# read them automatically without requiring manual -var flags.
+# Path convention: /<project_name>/bootstrap/<output_name>
 
 resource "aws_ssm_parameter" "ecr_repository_url" {
   name  = "/${var.project_name}/bootstrap/ecr_repository_url"

@@ -1,3 +1,20 @@
+# Terraform Plan & Apply workflow.
+#
+# On every push or PR to main:
+#   - Plans both bootstrap and main modules in parallel
+#   - Saves plan artifacts for review
+#
+# On push to main only (not PRs):
+#   - Applies bootstrap first (requires manual approval via "production" environment)
+#   - Then applies main (also requires approval, runs after bootstrap succeeds)
+#
+# Required GitHub secrets:
+#   - AWS_ACCESS_KEY_ID: IAM user access key
+#   - AWS_SECRET_ACCESS_KEY: corresponding secret key
+#
+# Required GitHub environments:
+#   - production: with required reviewers for manual approval
+
 name: Terraform Plan & Apply
 
 on:
@@ -11,6 +28,8 @@ env:
   TF_VERSION: "1.7"
 
 jobs:
+  # --- Plan jobs run in parallel on every push/PR ---
+
   bootstrap-plan:
     name: Bootstrap — Plan
     runs-on: ubuntu-latest
@@ -33,6 +52,7 @@ jobs:
         working-directory: bootstrap
         run: terraform init
 
+      # Save the plan as a binary file so apply uses the exact same changes.
       - name: Terraform Plan
         working-directory: bootstrap
         run: terraform plan -out=tfplan
@@ -75,12 +95,16 @@ jobs:
           name: main-plan
           path: main/tfplan
 
+  # --- Apply jobs run sequentially, only on push to main ---
+
+  # Bootstrap must apply first because main depends on SSM parameters
+  # written by bootstrap (ECR URL, Route53 zone ID, ACM cert ARN).
   bootstrap-apply:
     name: Bootstrap — Apply
     needs: bootstrap-plan
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
-    environment: production
+    environment: production # Requires manual approval
     steps:
       - uses: actions/checkout@v4
 
@@ -100,6 +124,7 @@ jobs:
         working-directory: bootstrap
         run: terraform init
 
+      # Download the saved plan so we apply exactly what was reviewed.
       - name: Download plan
         uses: actions/download-artifact@v4
         with:
@@ -110,12 +135,13 @@ jobs:
         working-directory: bootstrap
         run: terraform apply tfplan
 
+  # Main applies after bootstrap succeeds, ensuring SSM parameters exist.
   main-apply:
     name: Main — Apply
     needs: [main-plan, bootstrap-apply]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
-    environment: production
+    environment: production # Requires manual approval
     steps:
       - uses: actions/checkout@v4
 

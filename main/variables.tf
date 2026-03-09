@@ -1,3 +1,6 @@
+# Input variables for the main module.
+# Most have sensible defaults; bootstrap values are read from SSM automatically.
+
 variable "aws_region" {
   description = "AWS region to deploy resources"
   type        = string
@@ -16,28 +19,11 @@ variable "environment" {
   default     = "Production"
 }
 
+# Must match the port the application listens on (see Dockerfile CMD).
 variable "container_port" {
   description = "Port the container listens on"
   type        = number
   default     = 8080
-}
-
-variable "desired_count" {
-  description = "Desired number of ECS tasks"
-  type        = number
-  default     = 2
-}
-
-variable "min_capacity" {
-  description = "Minimum number of ECS tasks for autoscaling"
-  type        = number
-  default     = 2
-}
-
-variable "max_capacity" {
-  description = "Maximum number of ECS tasks for autoscaling"
-  type        = number
-  default     = 6
 }
 
 variable "vpc_cidr" {
@@ -52,13 +38,17 @@ variable "domain_name" {
   default     = "challenge.streaver.tinouy.com"
 }
 
+# Set to a valid email to receive CloudWatch alarm notifications via SNS.
+# Leave empty to skip the subscription.
 variable "alert_email" {
   description = "Email address for CloudWatch alarm notifications"
   type        = string
-  default     = "cmartinpf@gmail.com"
+  default     = ""
 }
 
 # --- Values from bootstrap (read from SSM Parameter Store) ---
+# The bootstrap module writes these values to SSM so the main module
+# can read them without requiring manual -var flags during apply.
 
 data "aws_ssm_parameter" "ecr_repository_url" {
   name = "/${var.project_name}/bootstrap/ecr_repository_url"
@@ -72,6 +62,7 @@ data "aws_ssm_parameter" "acm_certificate_arn" {
   name = "/${var.project_name}/bootstrap/acm_certificate_arn"
 }
 
+# Expose SSM values as locals for cleaner references throughout the module.
 locals {
   ecr_repository_url  = data.aws_ssm_parameter.ecr_repository_url.value
   acm_certificate_arn = data.aws_ssm_parameter.acm_certificate_arn.value
