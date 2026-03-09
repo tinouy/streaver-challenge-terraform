@@ -55,7 +55,7 @@ variable "domain_name" {
 variable "alert_email" {
   description = "Email address for CloudWatch alarm notifications"
   type        = string
-  default     = ""
+  default     = "cmartinpf@gmail.com"
 }
 
 # --- Values from bootstrap (read from SSM Parameter Store) ---
