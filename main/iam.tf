@@ -1,0 +1,77 @@
+# --- ECR ARN lookup from URL ---
+
+locals {
+  # Extract ECR repo ARN from the repository URL
+  # URL format: <account_id>.dkr.ecr.<region>.amazonaws.com/<repo_name>
+  ecr_repo_name = split("/", local.ecr_repository_url)[1]
+}
+
+data "aws_ecr_repository" "app" {
+  name = local.ecr_repo_name
+}
+
+# --- ECS Task Execution Role (pulls images, writes logs) ---
+
+resource "aws_iam_role" "ecs_execution" {
+  name = "${var.project_name}-ecs-execution"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "ecs-tasks.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "ecs_execution" {
+  name = "ecs-execution"
+  role = aws_iam_role.ecs_execution.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage",
+          "ecr:BatchCheckLayerAvailability",
+        ]
+        Resource = data.aws_ecr_repository.app.arn
+      },
+      {
+        Effect   = "Allow"
+        Action   = "ecr:GetAuthorizationToken"
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+        ]
+        Resource = "${aws_cloudwatch_log_group.app.arn}:*"
+      },
+    ]
+  })
+}
+
+# --- ECS Task Role (app runtime permissions) ---
+
+resource "aws_iam_role" "ecs_task" {
+  name = "${var.project_name}-ecs-task"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "ecs-tasks.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+}
+
+# No additional policies attached — the app has no AWS SDK calls.
+# Add policies here if the app needs access to S3, DynamoDB, etc.
